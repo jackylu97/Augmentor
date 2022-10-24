@@ -960,6 +960,78 @@ class Flip(Operation):
         return augmented_images
 
 
+class CropRatio(Operation):
+    """
+        :param probability: Controls the probability that the operation is
+         performed when it is invoked in the pipeline.
+        :param ratio: aspect ratio to crop the image. Width/height
+        :param centre: Whether to crop from the centre of the image or a random
+         location within the image, while maintaining the size of the crop
+         without cropping out of the original image's area.
+        :param resolution: Optionally include a final resolution for the image. This could 
+         theoretically be different than the ratio you supply to this function, but I don't 
+         know why you'd do that. Specifying manually removes any possible rounding errors.
+
+        :type probability: Float
+        :type ratio: Float (width / height)
+        :type centre: Boolean
+        :type resolution: Tuple[int, int]
+        """
+    def __init__(self, probability, ratio, centre=True, resolution=None):
+        Operation.__init__(self, probability)
+        self.ratio = ratio
+        self.centre = centre
+        self.resolution = resolution
+
+    def perform_operation(self, images):
+        """
+        :param images: The image(s) to crop the area from.
+        :type images: List containing PIL.Image object(s).
+        :return: The transformed image(s) as a list of object(s) of type
+         PIL.Image.
+        """
+
+        def do(image):
+            w, h = image.size  # All images must be the same size, so we can just check the first image in the list
+
+            current_ratio = w / h
+            new_width, new_height = w,h
+            if current_ratio > self.ratio:
+                # we need to crop the width
+                new_width = self.ratio * h
+            elif current_ratio < self.ratio:
+                new_height = w / self.ratio
+
+            left_shift_max = int((w - new_width))
+            down_shift_max = int((h - new_height))
+
+            left_shift = random.randint(0, left_shift_max)
+            down_shift = random.randint(0, down_shift_max)
+
+            if self.centre:
+                return image.crop(((w/2)-(new_width/2), (h/2)-(new_height/2), (w/2)+(new_width/2), (h/2)+(new_height/2)))
+            else:
+                return image.crop((left_shift, down_shift, new_width + left_shift, new_height + down_shift))
+
+        def maybe_resize(image):
+            if self.resolution:
+                new_width, new_height = self.resolution
+                return image.resize((int(new_width), int(new_height)), Image.BILINEAR)
+            else:
+                return image
+
+        augmented_images = []
+
+        for image in images:
+            cropped = do(image)
+            if self.new_width:
+                cropped = maybe_resize(image)
+            augmented_images.append(cropped)
+              
+
+        return augmented_images
+
+
 class Crop(Operation):
     """
     This class is used to crop images by absolute values passed as parameters.
@@ -1001,16 +1073,18 @@ class Crop(Operation):
          PIL.Image.
         """
 
-        w, h = images[0].size  # All images must be the same size, so we can just check the first image in the list
-
-        left_shift = random.randint(0, int((w - self.width)))
-        down_shift = random.randint(0, int((h - self.height)))
-
         def do(image):
+            w, h = image.size  # All images must be the same size, so we can just check the first image in the list
 
-            # TODO: Fix. We may want a full crop.
+            left_shift_max = max(int((w - self.width)), 0)
+            down_shift_max = max(int((h - self.height)), 0)
+
+            left_shift = random.randint(0, left_shift_max)
+            down_shift = random.randint(0, down_shift_max)
+
+            # If we don't have an image of sufficient width or height, skip
             if self.width > w or self.height > h:
-                return image
+                return None
 
             if self.centre:
                 return image.crop(((w/2)-(self.width/2), (h/2)-(self.height/2), (w/2)+(self.width/2), (h/2)+(self.height/2)))
@@ -1020,7 +1094,9 @@ class Crop(Operation):
         augmented_images = []
 
         for image in images:
-            augmented_images.append(do(image))
+            cropped = do(image)
+            if cropped:
+                augmented_images.append(cropped)
 
         return augmented_images
 

@@ -278,7 +278,8 @@ class Pipeline(object):
         #   return images[0]  # Here we return only the first image for the generators.
 
         # return images[0]  # old method.
-        return images[0]
+        if len(images) > 0:
+            return images[0]
 
     def _execute_with_array(self, image):
         """
@@ -1202,6 +1203,17 @@ class Pipeline(object):
             raise ValueError("The randomise_percentage_area argument must be True or False.")
         else:
             self.add_operation(ZoomRandom(probability=probability, percentage_area=percentage_area, randomise=randomise_percentage_area))
+
+    def crop_ratio(self, probability, ratio, centre=True, resolution=None):
+        if not 0 < probability <= 1:
+            raise ValueError(Pipeline._probability_error_text)
+        elif ratio <= 0:
+            raise ValueError("The ratio argument must be greater than 0.")
+        elif not isinstance(centre, bool):
+            raise ValueError("The centre argument must be True or False.")
+        else:
+            self.add_operation(CropRatio(probability=probability, ratio=ratio, centre=centre, resolution=resolution))
+
 
     def crop_by_size(self, probability, width, height, centre=True):
         """
